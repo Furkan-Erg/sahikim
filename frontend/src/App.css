@@ -243,6 +243,10 @@ button.secondary {
   text-align: center;
 }
 
+.progress-summary {
+  margin: 0 0 0.75rem;
+}
+
 .label {
   font-size: 0.85rem;
   text-transform: uppercase;

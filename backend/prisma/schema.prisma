@@ -1,0 +1,74 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RoomPhase {
+  LOBBY
+  ANSWERING
+  REVEAL
+  QUESTION_RESULT
+  FINISHED
+}
+
+model Room {
+  id                   String    @id @default(uuid())
+  code                 String    @unique
+  phase                RoomPhase @default(LOBBY)
+  hostPlayerId         String?
+  currentQuestionIndex Int       @default(0)
+  createdAt            DateTime  @default(now())
+  players              Player[]
+  questions            Question[]
+}
+
+model Player {
+  id        String     @id @default(uuid())
+  roomId    String
+  room      Room       @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  nickname  String
+  socketId  String?
+  questions Question[]
+  answers   Answer[]
+  votes     Vote[]
+
+  @@unique([roomId, nickname])
+}
+
+model Question {
+  id       String   @id @default(uuid())
+  roomId   String
+  room     Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  authorId String
+  author   Player   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  text     String
+  order    Int      @default(0)
+  answers  Answer[]
+}
+
+model Answer {
+  id         String   @id @default(uuid())
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  playerId   String
+  player     Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  text       String
+  votes      Vote[]
+
+  @@unique([questionId, playerId])
+}
+
+model Vote {
+  id       String @id @default(uuid())
+  answerId String
+  answer   Answer @relation(fields: [answerId], references: [id], onDelete: Cascade)
+  voterId  String
+  voter    Player @relation(fields: [voterId], references: [id], onDelete: Cascade)
+  value    Int
+
+  @@unique([answerId, voterId])
+}

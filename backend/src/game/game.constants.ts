@@ -1,0 +1,3 @@
+export const MIN_PLAYERS = 2;
+export const ROOM_CODE_LENGTH = 4;
+export const ROOM_CODE_CHARSET = 'ABCDEFGHJKLMNPQRSTUVWXYZ';

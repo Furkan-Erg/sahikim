@@ -9,6 +9,7 @@ import {
 } from '@nestjs/websockets';
 import { ForbiddenException, HttpException } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
+import { DISCONNECT_GRACE_MS } from './game.constants';
 import { GameService } from './game.service';
 import { AnswerInput, VoteInput } from './game.types';
 
@@ -24,16 +25,32 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server!: Server;
 
+  private disconnectTimers = new Map<string, NodeJS.Timeout>();
+
   constructor(private readonly gameService: GameService) {}
 
   handleConnection(_client: Socket) {}
 
   async handleDisconnect(client: Socket) {
+    const data = client.data as SocketData;
+    const playerId =
+      data.playerId ?? (await this.gameService.getPlayerIdBySocketId(client.id));
+
+    if (!playerId) {
+      await this.gameService.clearSocketId(client.id);
+      return;
+    }
+
     await this.gameService.clearSocketId(client.id);
+    this.schedulePlayerRemoval(playerId);
   }
 
   @SubscribeMessage('room:leave')
   handleLeaveRoom(@ConnectedSocket() client: Socket) {
+    const data = client.data as SocketData;
+    if (data.playerId) {
+      this.cancelDisconnectTimer(data.playerId);
+    }
     this.leaveCurrentRoom(client);
     return { ok: true };
   }
@@ -46,6 +63,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     try {
       this.leaveCurrentRoom(client);
       const result = await this.gameService.createRoom(data.nickname, client.id);
+      this.cancelDisconnectTimer(result.playerId);
       this.setSocketData(client, result.playerId, result.roomCode);
       client.join(result.roomCode);
       await this.broadcastRoom(result.roomId);
@@ -67,6 +85,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
         data.nickname,
         client.id,
       );
+      this.cancelDisconnectTimer(result.playerId);
       this.setSocketData(client, result.playerId, result.roomCode);
       client.join(result.roomCode);
       await this.broadcastRoom(result.roomId);
@@ -176,6 +195,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     try {
       this.leaveCurrentRoom(client);
+      this.cancelDisconnectTimer(data.playerId);
       const roomId = await this.gameService.syncPlayerSocket(
         data.playerId,
         data.roomCode,
@@ -190,6 +210,28 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
       client.emit('room:state', state);
     } catch (error) {
       return this.emitError(client, error);
+    }
+  }
+
+  private schedulePlayerRemoval(playerId: string) {
+    this.cancelDisconnectTimer(playerId);
+
+    const timer = setTimeout(async () => {
+      this.disconnectTimers.delete(playerId);
+      const roomId = await this.gameService.removePlayer(playerId);
+      if (roomId) {
+        await this.broadcastRoom(roomId);
+      }
+    }, DISCONNECT_GRACE_MS);
+
+    this.disconnectTimers.set(playerId, timer);
+  }
+
+  private cancelDisconnectTimer(playerId: string) {
+    const timer = this.disconnectTimers.get(playerId);
+    if (timer) {
+      clearTimeout(timer);
+      this.disconnectTimers.delete(playerId);
     }
   }
 

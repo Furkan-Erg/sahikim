@@ -531,6 +531,51 @@ export class GameService {
     return player.roomId;
   }
 
+  async getPlayerIdBySocketId(socketId: string) {
+    const player = await this.prisma.player.findFirst({
+      where: { socketId },
+    });
+    return player?.id ?? null;
+  }
+
+  async removePlayer(playerId: string): Promise<string | null> {
+    const player = await this.prisma.player.findUnique({
+      where: { id: playerId },
+      include: { room: true },
+    });
+
+    if (!player) {
+      return null;
+    }
+
+    const roomId = player.roomId;
+    const wasHost = player.room.hostPlayerId === playerId;
+
+    await this.prisma.player.delete({ where: { id: playerId } });
+
+    const remaining = await this.prisma.player.findMany({
+      where: { roomId },
+      orderBy: { id: 'asc' },
+    });
+
+    if (remaining.length === 0) {
+      await this.prisma.room.delete({ where: { id: roomId } });
+      return null;
+    }
+
+    if (wasHost) {
+      await this.prisma.room.update({
+        where: { id: roomId },
+        data: { hostPlayerId: remaining[0].id },
+      });
+    }
+
+    await this.reindexQuestions(roomId);
+    await this.handleRoomAfterPlayerLeave(roomId);
+
+    return roomId;
+  }
+
   async clearSocketId(socketId: string) {
     await this.prisma.player.updateMany({
       where: { socketId },
@@ -581,6 +626,82 @@ export class GameService {
       orderBy: { order: 'asc' },
       skip: index,
     });
+  }
+
+  private async reindexQuestions(roomId: string) {
+    const questions = await this.prisma.question.findMany({
+      where: { roomId },
+      orderBy: { order: 'asc' },
+    });
+
+    await Promise.all(
+      questions.map((question, index) =>
+        this.prisma.question.update({
+          where: { id: question.id },
+          data: { order: index },
+        }),
+      ),
+    );
+  }
+
+  private async handleRoomAfterPlayerLeave(roomId: string) {
+    const room = await this.prisma.room.findUnique({
+      where: { id: roomId },
+      include: { players: true },
+    });
+
+    if (!room) {
+      return;
+    }
+
+    const questionCount = await this.prisma.question.count({
+      where: { roomId },
+    });
+
+    if (room.phase !== RoomPhase.LOBBY && room.phase !== RoomPhase.FINISHED) {
+      if (room.players.length < MIN_PLAYERS || questionCount === 0) {
+        await this.prisma.room.update({
+          where: { id: roomId },
+          data: { phase: RoomPhase.FINISHED },
+        });
+        return;
+      }
+    }
+
+    if (room.phase === RoomPhase.ANSWERING) {
+      const allAnswered = await this.checkAllPlayersAnswered(roomId);
+      if (allAnswered && questionCount > 0) {
+        await this.prisma.room.update({
+          where: { id: roomId },
+          data: {
+            phase: RoomPhase.REVEAL,
+            currentQuestionIndex: 0,
+          },
+        });
+      }
+      return;
+    }
+
+    if (
+      room.phase === RoomPhase.REVEAL ||
+      room.phase === RoomPhase.QUESTION_RESULT
+    ) {
+      if (questionCount === 0) {
+        await this.prisma.room.update({
+          where: { id: roomId },
+          data: { phase: RoomPhase.FINISHED },
+        });
+        return;
+      }
+
+      const newIndex = Math.min(room.currentQuestionIndex, questionCount - 1);
+      if (newIndex !== room.currentQuestionIndex) {
+        await this.prisma.room.update({
+          where: { id: roomId },
+          data: { currentQuestionIndex: newIndex },
+        });
+      }
+    }
   }
 
   private buildAnsweringProgress(

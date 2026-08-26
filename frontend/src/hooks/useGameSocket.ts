@@ -3,39 +3,90 @@ import {
   createRoom,
   getSocket,
   joinRoom,
+  leaveRoom,
   offRoomError,
   offRoomState,
   onRoomError,
   onRoomState,
   syncRoom,
 } from '../api/socket';
+import {
+  clearRoomCodeFromUrl,
+  getRoomCodeFromUrl,
+  setRoomCodeInUrl,
+} from '../lib/url';
 import type { RoomState, Session } from '../types/game';
 
-const SESSION_KEY = 'sahikim_session';
+function sessionKey(roomCode: string) {
+  return `sahikim:session:${roomCode.toUpperCase()}`;
+}
 
-export function loadSession(): Session | null {
-  const raw = localStorage.getItem(SESSION_KEY);
+export function loadSession(roomCode: string): Session | null {
+  const raw = localStorage.getItem(sessionKey(roomCode));
   if (!raw) return null;
   try {
-    return JSON.parse(raw) as Session;
+    const session = JSON.parse(raw) as Session;
+    if (session.roomCode.toUpperCase() !== roomCode.toUpperCase()) {
+      return null;
+    }
+    return session;
   } catch {
     return null;
   }
 }
 
 export function saveSession(session: Session) {
-  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  localStorage.setItem(
+    sessionKey(session.roomCode),
+    JSON.stringify({
+      ...session,
+      roomCode: session.roomCode.toUpperCase(),
+    }),
+  );
 }
 
-export function clearSession() {
-  localStorage.removeItem(SESSION_KEY);
+export function clearSession(roomCode: string) {
+  localStorage.removeItem(sessionKey(roomCode));
+}
+
+function useUrlRoomCode() {
+  const [urlRoomCode, setUrlRoomCode] = useState(() => getRoomCodeFromUrl());
+
+  useEffect(() => {
+    const sync = () => setUrlRoomCode(getRoomCodeFromUrl());
+    window.addEventListener('popstate', sync);
+    return () => window.removeEventListener('popstate', sync);
+  }, []);
+
+  const updateUrlRoomCode = useCallback((code: string) => {
+    setRoomCodeInUrl(code);
+    setUrlRoomCode(getRoomCodeFromUrl());
+  }, []);
+
+  const resetUrl = useCallback(() => {
+    clearRoomCodeFromUrl();
+    setUrlRoomCode(null);
+  }, []);
+
+  return { urlRoomCode, updateUrlRoomCode, resetUrl };
 }
 
 export function useGameSocket() {
-  const [session, setSession] = useState<Session | null>(() => loadSession());
+  const { urlRoomCode, updateUrlRoomCode, resetUrl } = useUrlRoomCode();
+  const [session, setSession] = useState<Session | null>(null);
   const [roomState, setRoomState] = useState<RoomState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [connected, setConnected] = useState(getSocket().connected);
+
+  useEffect(() => {
+    if (!urlRoomCode) {
+      setSession(null);
+      setRoomState(null);
+      return;
+    }
+    setSession(loadSession(urlRoomCode));
+    setRoomState(null);
+  }, [urlRoomCode]);
 
   useEffect(() => {
     const socket = getSocket();
@@ -43,6 +94,10 @@ export function useGameSocket() {
     const handleConnect = () => setConnected(true);
     const handleDisconnect = () => setConnected(false);
     const handleState = (state: RoomState) => {
+      const activeCode = getRoomCodeFromUrl();
+      if (activeCode && state.code !== activeCode.toUpperCase()) {
+        return;
+      }
       setRoomState(state);
       setError(null);
     };
@@ -64,51 +119,66 @@ export function useGameSocket() {
   }, []);
 
   useEffect(() => {
-    if (session && connected) {
+    if (session && connected && urlRoomCode) {
       syncRoom(session.roomCode, session.playerId);
     }
-  }, [session, connected]);
+  }, [session, connected, urlRoomCode]);
 
-  const handleCreateRoom = useCallback(async (nickname: string) => {
-    setError(null);
-    const result = await createRoom(nickname);
-    if (result?.error) {
-      setError(result.error);
-      return;
-    }
-    const newSession: Session = {
-      playerId: result.playerId,
-      roomCode: result.roomCode,
-      nickname: nickname.trim(),
-    };
-    saveSession(newSession);
-    setSession(newSession);
-  }, []);
+  const handleCreateRoom = useCallback(
+    async (nickname: string) => {
+      setError(null);
+      leaveRoom();
+      const result = await createRoom(nickname);
+      if (result?.error) {
+        setError(result.error);
+        return;
+      }
+      const newSession: Session = {
+        playerId: result.playerId,
+        roomCode: result.roomCode,
+        nickname: nickname.trim(),
+      };
+      updateUrlRoomCode(result.roomCode);
+      saveSession(newSession);
+      setSession(newSession);
+    },
+    [updateUrlRoomCode],
+  );
 
-  const handleJoinRoom = useCallback(async (code: string, nickname: string) => {
-    setError(null);
-    const result = await joinRoom(code, nickname);
-    if (result?.error) {
-      setError(result.error);
-      return;
-    }
-    const newSession: Session = {
-      playerId: result.playerId,
-      roomCode: result.roomCode,
-      nickname: nickname.trim(),
-    };
-    saveSession(newSession);
-    setSession(newSession);
-  }, []);
+  const handleJoinRoom = useCallback(
+    async (code: string, nickname: string) => {
+      setError(null);
+      leaveRoom();
+      const result = await joinRoom(code, nickname);
+      if (result?.error) {
+        setError(result.error);
+        return;
+      }
+      const newSession: Session = {
+        playerId: result.playerId,
+        roomCode: result.roomCode,
+        nickname: nickname.trim(),
+      };
+      updateUrlRoomCode(result.roomCode);
+      saveSession(newSession);
+      setSession(newSession);
+    },
+    [updateUrlRoomCode],
+  );
 
   const resetGame = useCallback(() => {
-    clearSession();
+    if (urlRoomCode) {
+      clearSession(urlRoomCode);
+    }
+    leaveRoom();
+    resetUrl();
     setSession(null);
     setRoomState(null);
     setError(null);
-  }, []);
+  }, [urlRoomCode, resetUrl]);
 
   return {
+    urlRoomCode,
     session,
     roomState,
     error,

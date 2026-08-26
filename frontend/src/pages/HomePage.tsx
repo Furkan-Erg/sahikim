@@ -1,15 +1,14 @@
 import { FormEvent, useState } from 'react';
+import { navigateToJoin } from '../lib/url';
 
 interface HomePageProps {
   onCreateRoom: (nickname: string) => Promise<void>;
-  onJoinRoom: (code: string, nickname: string) => Promise<void>;
   error: string | null;
   connected: boolean;
 }
 
 export function HomePage({
   onCreateRoom,
-  onJoinRoom,
   error,
   connected,
 }: HomePageProps) {
@@ -24,11 +23,9 @@ export function HomePage({
     setLoading(false);
   };
 
-  const handleJoin = async (e: FormEvent) => {
+  const handleGoToJoin = (e: FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    await onJoinRoom(roomCode, nickname);
-    setLoading(false);
+    navigateToJoin(roomCode.trim());
   };
 
   return (
@@ -64,7 +61,7 @@ export function HomePage({
           </button>
         </form>
 
-        <form className="card" onSubmit={handleJoin}>
+        <form className="card" onSubmit={handleGoToJoin}>
           <h2>Odaya Katıl</h2>
           <label htmlFor="roomCode">Oyun Kodu</label>
           <input
@@ -74,8 +71,8 @@ export function HomePage({
             placeholder="ABCD"
             maxLength={4}
           />
-          <button type="submit" disabled={!nickname.trim() || !roomCode.trim() || loading || !connected}>
-            Odaya Katıl
+          <button type="submit" disabled={!roomCode.trim() || loading || !connected}>
+            Devam Et
           </button>
         </form>
       </div>

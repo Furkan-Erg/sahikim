@@ -36,6 +36,10 @@ export function joinRoom(code: string, nickname: string) {
   return getSocket().emitWithAck('room:join', { code, nickname });
 }
 
+export function leaveRoom() {
+  getSocket().emit('room:leave');
+}
+
 export function syncRoom(roomCode: string, playerId: string) {
   getSocket().emit('room:sync', { roomCode, playerId });
 }

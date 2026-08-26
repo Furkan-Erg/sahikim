@@ -1,6 +1,7 @@
 import { useGameSocket } from './hooks/useGameSocket';
 import { AnsweringPage } from './pages/AnsweringPage';
 import { HomePage } from './pages/HomePage';
+import { JoinPage } from './pages/JoinPage';
 import { LeaderboardPage } from './pages/LeaderboardPage';
 import { LobbyPage } from './pages/LobbyPage';
 import { QuestionResultPage } from './pages/QuestionResultPage';
@@ -9,6 +10,7 @@ import './App.css';
 
 function App() {
   const {
+    urlRoomCode,
     session,
     roomState,
     error,
@@ -18,10 +20,20 @@ function App() {
     resetGame,
   } = useGameSocket();
 
-  if (!session) {
+  if (!urlRoomCode) {
     return (
       <HomePage
         onCreateRoom={handleCreateRoom}
+        error={error}
+        connected={connected}
+      />
+    );
+  }
+
+  if (!session) {
+    return (
+      <JoinPage
+        roomCode={urlRoomCode}
         onJoinRoom={handleJoinRoom}
         error={error}
         connected={connected}
@@ -35,7 +47,16 @@ function App() {
         <header className="hero compact">
           <h1>Sahikim</h1>
           <p>Odaya bağlanılıyor...</p>
+          <p className="room-code-display">{urlRoomCode}</p>
         </header>
+        {error && (
+          <>
+            <p className="banner error">{error}</p>
+            <button type="button" className="secondary" onClick={resetGame}>
+              Ana Sayfaya Dön
+            </button>
+          </>
+        )}
       </div>
     );
   }
@@ -69,7 +90,6 @@ function App() {
       return (
         <HomePage
           onCreateRoom={handleCreateRoom}
-          onJoinRoom={handleJoinRoom}
           error={error}
           connected={connected}
         />

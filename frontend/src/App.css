@@ -243,6 +243,24 @@ button.secondary {
   text-align: center;
 }
 
+.room-code-display {
+  font-size: 2.5rem;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-align: center;
+  margin: 0.5rem 0;
+}
+
+.share-card {
+  text-align: center;
+}
+
+.share-link {
+  word-break: break-all;
+  margin: 0.5rem 0 1rem;
+  font-size: 0.85rem;
+}
+
 .progress-summary {
   margin: 0 0 0.75rem;
 }

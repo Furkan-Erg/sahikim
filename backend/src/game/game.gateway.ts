@@ -7,7 +7,7 @@ import {
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
-import { HttpException } from '@nestjs/common';
+import { ForbiddenException, HttpException } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { GameService } from './game.service';
 import { AnswerInput, VoteInput } from './game.types';
@@ -32,12 +32,19 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     await this.gameService.clearSocketId(client.id);
   }
 
+  @SubscribeMessage('room:leave')
+  handleLeaveRoom(@ConnectedSocket() client: Socket) {
+    this.leaveCurrentRoom(client);
+    return { ok: true };
+  }
+
   @SubscribeMessage('room:create')
   async createRoom(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { nickname: string },
   ) {
     try {
+      this.leaveCurrentRoom(client);
       const result = await this.gameService.createRoom(data.nickname, client.id);
       this.setSocketData(client, result.playerId, result.roomCode);
       client.join(result.roomCode);
@@ -54,6 +61,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody() data: { code: string; nickname: string },
   ) {
     try {
+      this.leaveCurrentRoom(client);
       const result = await this.gameService.joinRoom(
         data.code,
         data.nickname,
@@ -74,6 +82,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody() data: { playerId: string; text: string },
   ) {
     try {
+      this.assertPlayer(client, data.playerId);
       const roomId = await this.gameService.submitQuestion(
         data.playerId,
         data.text,
@@ -90,6 +99,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody() data: { playerId: string },
   ) {
     try {
+      this.assertPlayer(client, data.playerId);
       const roomId = await this.gameService.startGame(data.playerId);
       await this.broadcastRoom(roomId);
     } catch (error) {
@@ -103,6 +113,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody() data: { playerId: string; answers: AnswerInput[] },
   ) {
     try {
+      this.assertPlayer(client, data.playerId);
       const roomId = await this.gameService.submitAnswers(
         data.playerId,
         data.answers,
@@ -119,6 +130,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody() data: { playerId: string; votes: VoteInput[] },
   ) {
     try {
+      this.assertPlayer(client, data.playerId);
       const roomId = await this.gameService.submitVotes(
         data.playerId,
         data.votes,
@@ -135,6 +147,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody() data: { playerId: string },
   ) {
     try {
+      this.assertPlayer(client, data.playerId);
       const roomId = await this.gameService.endVoting(data.playerId);
       await this.broadcastRoom(roomId);
     } catch (error) {
@@ -148,6 +161,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody() data: { playerId: string },
   ) {
     try {
+      this.assertPlayer(client, data.playerId);
       const roomId = await this.gameService.nextQuestion(data.playerId);
       await this.broadcastRoom(roomId);
     } catch (error) {
@@ -161,9 +175,14 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody() data: { roomCode: string; playerId: string },
   ) {
     try {
-      const roomId = await this.gameService.getRoomIdByCode(data.roomCode);
-      this.setSocketData(client, data.playerId, data.roomCode);
-      client.join(data.roomCode);
+      this.leaveCurrentRoom(client);
+      const roomId = await this.gameService.syncPlayerSocket(
+        data.playerId,
+        data.roomCode,
+        client.id,
+      );
+      this.setSocketData(client, data.playerId, data.roomCode.toUpperCase());
+      client.join(data.roomCode.toUpperCase());
       const state = await this.gameService.buildRoomState(
         roomId,
         data.playerId,
@@ -174,10 +193,26 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
+  private leaveCurrentRoom(client: Socket) {
+    const data = client.data as SocketData;
+    if (data.roomCode) {
+      client.leave(data.roomCode);
+    }
+    data.playerId = undefined;
+    data.roomCode = undefined;
+  }
+
+  private assertPlayer(client: Socket, playerId: string) {
+    const data = client.data as SocketData;
+    if (!data.playerId || data.playerId !== playerId) {
+      throw new ForbiddenException('Bu işlem için yetkin yok.');
+    }
+  }
+
   private setSocketData(client: Socket, playerId: string, roomCode: string) {
     const data = client.data as SocketData;
     data.playerId = playerId;
-    data.roomCode = roomCode;
+    data.roomCode = roomCode.toUpperCase();
   }
 
   private async broadcastRoom(roomId: string) {

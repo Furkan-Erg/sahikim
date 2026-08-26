@@ -503,6 +503,34 @@ export class GameService {
     return room.id;
   }
 
+  async verifyPlayerInRoom(playerId: string, roomCode: string) {
+    const player = await this.prisma.player.findUnique({
+      where: { id: playerId },
+      include: { room: true },
+    });
+
+    if (!player) {
+      throw new NotFoundException('Oyuncu bulunamadı.');
+    }
+
+    if (player.room.code !== roomCode.toUpperCase()) {
+      throw new ForbiddenException('Oyuncu bu odada değil.');
+    }
+
+    return player;
+  }
+
+  async syncPlayerSocket(playerId: string, roomCode: string, socketId: string) {
+    const player = await this.verifyPlayerInRoom(playerId, roomCode);
+
+    await this.prisma.player.update({
+      where: { id: player.id },
+      data: { socketId },
+    });
+
+    return player.roomId;
+  }
+
   async clearSocketId(socketId: string) {
     await this.prisma.player.updateMany({
       where: { socketId },

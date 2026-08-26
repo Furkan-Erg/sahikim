@@ -1,5 +1,6 @@
 import { FormEvent, useState } from 'react';
 import { startGame, submitQuestion } from '../api/socket';
+import { getShareableRoomLink } from '../lib/url';
 import type { RoomState, Session } from '../types/game';
 
 interface LobbyPageProps {
@@ -11,11 +12,14 @@ interface LobbyPageProps {
 export function LobbyPage({ session, roomState, error }: LobbyPageProps) {
   const [question, setQuestion] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const me = roomState.players.find((p) => p.id === session.playerId);
   const allReady =
     roomState.players.length >= 2 &&
     roomState.players.every((p) => p.hasSubmittedQuestion);
+
+  const shareLink = getShareableRoomLink(roomState.code);
 
   const handleSubmitQuestion = async (e: FormEvent) => {
     e.preventDefault();
@@ -29,16 +33,33 @@ export function LobbyPage({ session, roomState, error }: LobbyPageProps) {
     startGame(session.playerId);
   };
 
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(shareLink);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  };
+
   return (
     <div className="page">
       <header className="hero compact">
         <h1>Lobi</h1>
-        <p>
-          Oda kodu: <strong>{roomState.code}</strong>
-        </p>
       </header>
 
       {error && <p className="banner error">{error}</p>}
+
+      <section className="card highlight share-card">
+        <p className="label">Oyun Kodu</p>
+        <p className="room-code-display">{roomState.code}</p>
+        <p className="muted share-link">{shareLink}</p>
+        <button type="button" className="secondary" onClick={handleCopyLink}>
+          {copied ? 'Link Kopyalandı!' : 'Linki Kopyala'}
+        </button>
+        <p className="muted center">Arkadaşların bu linkle odaya katılabilir.</p>
+      </section>
 
       <section className="card">
         <h2>Oyuncular ({roomState.players.length})</h2>

@@ -9,6 +9,7 @@ import {
 } from '@nestjs/websockets';
 import { ForbiddenException, HttpException } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
+import { getCorsOrigin } from '../cors.config';
 import { DISCONNECT_GRACE_MS } from './game.constants';
 import { GameService } from './game.service';
 import { AnswerInput, VoteInput } from './game.types';
@@ -19,7 +20,7 @@ interface SocketData {
 }
 
 @WebSocketGateway({
-  cors: { origin: '*' },
+  cors: { origin: getCorsOrigin() },
 })
 export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()

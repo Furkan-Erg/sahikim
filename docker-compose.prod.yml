@@ -1,0 +1,59 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: sahikim-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-sahikim}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-sahikim}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - internal
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    container_name: sahikim-backend
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-sahikim}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-sahikim}}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://game.furkanerg.com}
+      NODE_ENV: production
+    networks:
+      - internal
+      - web
+    expose:
+      - '3000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_SOCKET_URL: ${VITE_SOCKET_URL:-https://game.furkanerg.com}
+    container_name: sahikim-frontend
+    networks:
+      - web
+    expose:
+      - '5173'
+    depends_on:
+      backend:
+        condition: service_started
+    restart: unless-stopped
+
+networks:
+  internal:
+    driver: bridge
+  web:
+    external: true
+
+volumes:
+  postgres_data:

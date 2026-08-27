@@ -5,8 +5,8 @@ WORKDIR /app
 ARG VITE_SOCKET_URL=http://localhost:3000
 ENV VITE_SOCKET_URL=$VITE_SOCKET_URL
 
-COPY package.json ./
-RUN npm install
+COPY package.json package-lock.json ./
+RUN npm ci
 
 COPY . .
 RUN npm run build

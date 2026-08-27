@@ -54,6 +54,7 @@ networks:
     driver: bridge
   web:
     external: true
+    name: server_web
 
 volumes:
   postgres_data:

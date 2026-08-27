@@ -22,7 +22,7 @@ services:
     container_name: sahikim-backend
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-sahikim}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-sahikim}}
-      CORS_ORIGINS: ${CORS_ORIGINS:-https://game.furkanerg.com}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://sahikim.furkanerg.com}
       NODE_ENV: production
     networks:
       - internal
@@ -38,7 +38,7 @@ services:
     build:
       context: ./frontend
       args:
-        VITE_SOCKET_URL: ${VITE_SOCKET_URL:-https://game.furkanerg.com}
+        VITE_SOCKET_URL: ${VITE_SOCKET_URL:-https://sahikim.furkanerg.com}
     container_name: sahikim-frontend
     networks:
       - web

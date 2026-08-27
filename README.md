@@ -39,8 +39,8 @@ Sahikim, VPS üzerinde ana Docker Compose ve Nginx ile birlikte çalışacak şe
 
 ```text
 Internet → Cloudflare → VPS Nginx
-                           ├── game.furkanerg.com/           → sahikim-frontend:5173
-                           └── game.furkanerg.com/socket.io/ → sahikim-backend:3000
+                           ├── sahikim.furkanerg.com/           → sahikim-frontend:5173
+                           └── sahikim.furkanerg.com/socket.io/ → sahikim-backend:3000
                                                                     ↓
                                                               sahikim-postgres (internal network)
 ```
@@ -81,8 +81,8 @@ cp .env.example .env
 | `POSTGRES_USER` | PostgreSQL kullanıcı adı (varsayılan: `sahikim`) |
 | `POSTGRES_DB` | Veritabanı adı (varsayılan: `sahikim`) |
 | `DATABASE_URL` | Backend Prisma bağlantı dizesi (belirtilmezse compose otomatik oluşturur) |
-| `VITE_SOCKET_URL` | Frontend build arg — production Socket.IO URL (varsayılan: `https://game.furkanerg.com`) |
-| `CORS_ORIGINS` | İzin verilen origin'ler, virgülle ayrılmış (varsayılan: `https://game.furkanerg.com`) |
+| `VITE_SOCKET_URL` | Frontend build arg — production Socket.IO URL (varsayılan: `https://sahikim.furkanerg.com`) |
+| `CORS_ORIGINS` | İzin verilen origin'ler, virgülle ayrılmış (varsayılan: `https://sahikim.furkanerg.com`) |
 
 ### Production Compose Çalıştırma
 
@@ -112,8 +112,8 @@ Ana VPS Nginx yapılandırmasında (bu repoda değil):
 
 | İstek | Hedef |
 | --- | --- |
-| `game.furkanerg.com/` | `http://sahikim-frontend:5173` |
-| `game.furkanerg.com/socket.io/` | `http://sahikim-backend:3000` |
+| `sahikim.furkanerg.com/` | `http://sahikim-frontend:5173` |
+| `sahikim.furkanerg.com/socket.io/` | `http://sahikim-backend:3000` |
 
 Socket.IO default path (`/socket.io/`) değiştirilmemiştir; frontend `io(VITE_SOCKET_URL)` kullanır.
 

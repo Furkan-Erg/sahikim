@@ -12,18 +12,15 @@ RUN ./node_modules/.bin/prisma generate \
   && npm run build
 
 # Prisma CLI is a devDependency; bundle its lockfile-pinned tree for the runner stage.
+RUN mkdir -p /prisma-toolchain/node_modules/.bin \
+  && cp -a node_modules/.bin/prisma* /prisma-toolchain/node_modules/.bin/
+
 RUN node <<'EOF'
 const fs = require('fs');
 const path = require('path');
 
 const root = process.cwd();
 const out = '/prisma-toolchain/node_modules';
-fs.mkdirSync(path.join(out, '.bin'), { recursive: true });
-fs.copyFileSync(
-  path.join(root, 'node_modules/.bin/prisma'),
-  path.join(out, '.bin/prisma'),
-);
-
 const copied = new Set();
 
 function copyPkg(absPath) {
